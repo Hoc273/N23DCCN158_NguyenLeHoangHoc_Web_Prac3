@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import api from '@/libs/api';
 import toast from 'react-hot-toast';
+import Comments from './Comments';
+
 
 type Post = {
   id: number;
@@ -129,6 +131,7 @@ export default function PostsPage() {
             <button onClick={() => deleteMutation.mutate(p.id)}
               className="text-red-500 hover:text-red-700 text-sm font-medium">Xoá</button>
           </div>
+          <Comments postId={p.id} />  {/* ← thêm dòng này */}
         </div>
       ))}
     </div>

@@ -62,4 +62,43 @@ app.delete('/api/posts/:id', async (req, res) => {
   res.json({ message: 'Đã xoá thành công' });
 });
 
-app.listen(5000, () => console.log('✅ Backend chạy tại http://localhost:5000'));
+// GET comments của 1 bài
+app.get('/api/posts/:id/comments', async (req, res) => {
+  const posts = await readData();
+  const post = posts.find(p => p.id === Number(req.params.id));
+  if (!post) return res.status(404).json({ error: 'Không tìm thấy bài viết' });
+  res.json(post.comments || []);
+});
+
+// POST comment
+app.post('/api/posts/:id/comments', async (req, res) => {
+  const { author, content } = req.body;
+  if (!author || !content)
+    return res.status(400).json({ error: 'Thiếu dữ liệu' });
+  const posts = await readData();
+  const index = posts.findIndex(p => p.id === Number(req.params.id));
+  if (index === -1) return res.status(404).json({ error: 'Không tìm thấy' });
+  const newComment = { id: Date.now(), author, content, createdAt: new Date().toISOString() };
+  if (!posts[index].comments) posts[index].comments = [];
+  posts[index].comments.push(newComment);
+  await writeData(posts);
+  res.status(201).json(newComment);
+});
+
+// DELETE comment
+app.delete('/api/comments/:commentId', async (req, res) => {
+  const commentId = Number(req.params.commentId);
+  const posts = await readData();
+  for (const post of posts) {
+    if (!post.comments) continue;
+    const index = post.comments.findIndex((c) => c.id === commentId);
+    if (index !== -1) {
+      post.comments.splice(index, 1);
+      await writeData(posts);
+      return res.json({ message: 'Đã xoá bình luận' });
+    }
+  }
+  res.status(404).json({ error: 'Không tìm thấy bình luận' });
+});
+
+app.listen(5000, () => console.log(' Backend chạy tại http://localhost:5000'));
