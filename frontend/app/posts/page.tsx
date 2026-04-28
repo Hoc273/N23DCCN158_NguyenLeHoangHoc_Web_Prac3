@@ -16,7 +16,11 @@ export default function PostsPage() {
   const [content, setContent] = useState('');
   const [author, setAuthor] = useState('');
 
-  // Lấy danh sách bài viết từ server
+  // State cho chỉnh sửa
+  const [editingPost, setEditingPost] = useState<Post | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editContent, setEditContent] = useState('');
+
   const fetchPosts = async () => {
     const res = await api.get('/api/posts');
     setPosts(res.data);
@@ -27,34 +31,54 @@ export default function PostsPage() {
   // Đăng bài mới
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    await toast.promise(
+      api.post('/api/posts', { title, content, author }),
+      {
+        loading: 'Đang đăng bài...',
+        success: 'Đăng bài thành công!',
+        error: 'Đăng bài thất bại!',
+      }
+    );
+    setTitle(''); setContent(''); setAuthor('');
+    fetchPosts();
+  };
+
+  // Xóa bài
+  const handleDelete = async (id: number) => {
+    if (!confirm('Bạn chắc chắn muốn xoá?')) return;
     try {
-      await toast.promise(
-        api.post('/api/posts', { title, content, author }),
-        {
-          loading: 'Đang đăng bài...',
-          success: 'Đăng bài thành công!',
-          error: 'Đăng bài thất bại!',
-        }
-      );
-      setTitle(''); setContent(''); setAuthor('');
+      await api.delete(`/api/posts/${id}`);
+      setPosts(prev => prev.filter(p => p.id !== id));
+      toast.success('Đã xoá bài viết', { icon: '🗑️' });
+    } catch {
+      toast.error('Xoá thất bại!');
       fetchPosts();
-    } catch (err: any) {
-      console.error(err.response?.data?.error);
     }
   };
 
-  // Xóa bài viết
-  const handleDelete = async (id: number) => {
-    if (!confirm('Bạn chắc chắn muốn xoá bài viết này?')) return;
-    try {
-      await api.delete(`/api/posts/${id}`);
-      // Optimistic update: cập nhật UI ngay, không cần gọi lại API
-      setPosts(prev => prev.filter(p => p.id !== id));
-      toast.success('Đã xoá bài viết', { icon: '🗑️' });
-    } catch (err) {
-      toast.error('Xoá thất bại, thử lại!');
-      fetchPosts(); // rollback
-    }
+  // Mở form sửa
+  const handleEditOpen = (post: Post) => {
+    setEditingPost(post);
+    setEditTitle(post.title);
+    setEditContent(post.content);
+  };
+
+  // Lưu chỉnh sửa
+  const handleEditSave = async () => {
+    if (!editingPost) return;
+    await toast.promise(
+      api.put(`/api/posts/${editingPost.id}`, {
+        title: editTitle,
+        content: editContent,
+      }),
+      {
+        loading: 'Đang lưu...',
+        success: 'Cập nhật thành công!',
+        error: 'Cập nhật thất bại!',
+      }
+    );
+    setEditingPost(null);
+    fetchPosts();
   };
 
   return (
@@ -63,34 +87,38 @@ export default function PostsPage() {
 
       {/* Form đăng bài */}
       <form onSubmit={handleSubmit} className="space-y-3 mb-8 bg-gray-50 p-4 rounded-lg">
-        <input
-          className="w-full border rounded p-2"
-          value={title}
-          onChange={e => setTitle(e.target.value)}
-          placeholder="Tiêu đề"
-          required
-        />
-        <textarea
-          className="w-full border rounded p-2"
-          value={content}
-          onChange={e => setContent(e.target.value)}
-          placeholder="Nội dung"
-          required
-        />
-        <input
-          className="w-full border rounded p-2"
-          value={author}
-          onChange={e => setAuthor(e.target.value)}
-          placeholder="Tác giả"
-          required
-        />
-        <button
-          type="submit"
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-        >
+        <input className="w-full border rounded p-2" value={title}
+          onChange={e => setTitle(e.target.value)} placeholder="Tiêu đề" required />
+        <textarea className="w-full border rounded p-2" value={content}
+          onChange={e => setContent(e.target.value)} placeholder="Nội dung" required />
+        <input className="w-full border rounded p-2" value={author}
+          onChange={e => setAuthor(e.target.value)} placeholder="Tác giả" required />
+        <button type="submit"
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
           Đăng bài
         </button>
       </form>
+
+      {/* Inline edit form */}
+      {editingPost && (
+        <div className="mb-6 bg-yellow-50 border border-yellow-300 p-4 rounded-lg">
+          <h2 className="font-bold mb-2">✏️ Đang sửa bài: {editingPost.title}</h2>
+          <input className="w-full border rounded p-2 mb-2" value={editTitle}
+            onChange={e => setEditTitle(e.target.value)} placeholder="Tiêu đề" />
+          <textarea className="w-full border rounded p-2 mb-2" value={editContent}
+            onChange={e => setEditContent(e.target.value)} placeholder="Nội dung" />
+          <div className="flex gap-2">
+            <button onClick={handleEditSave}
+              className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+              Lưu
+            </button>
+            <button onClick={() => setEditingPost(null)}
+              className="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500">
+              Huỷ
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Danh sách bài viết */}
       {posts.map(p => (
@@ -99,12 +127,16 @@ export default function PostsPage() {
             <h3 className="font-bold">{p.title}</h3>
             <p className="text-sm text-gray-500">{p.author} · {p.content}</p>
           </div>
-          <button
-            onClick={() => handleDelete(p.id)}
-            className="text-red-500 hover:text-red-700 text-sm font-medium"
-          >
-            Xoá
-          </button>
+          <div className="flex gap-2">
+            <button onClick={() => handleEditOpen(p)}
+              className="text-blue-500 hover:text-blue-700 text-sm font-medium">
+              Sửa
+            </button>
+            <button onClick={() => handleDelete(p.id)}
+              className="text-red-500 hover:text-red-700 text-sm font-medium">
+              Xoá
+            </button>
+          </div>
         </div>
       ))}
     </div>
